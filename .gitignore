@@ -1,0 +1,9 @@
+*.meta
+*.csproj
+*.sln
+\Temp
+\.idea
+\Library
+\UserSettings
+\obj
+\Logs
