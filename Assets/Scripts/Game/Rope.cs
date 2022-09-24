@@ -15,8 +15,8 @@ public class Rope : MonoBehaviour
     [SerializeField] float maxLength = 5;
     private float length = 2.3f;
 
-    private bool start = false;
-    private bool startDraw = false;
+    private bool start = true;
+    private bool startDraw = true;
 
     private Node hangItem;
 
@@ -35,16 +35,16 @@ public class Rope : MonoBehaviour
             Vector3.down, Vector3.up
         });
 
-        StartCoroutine(StartPhysics());
+        // StartCoroutine(StartPhysics());
         
     }
 
-    private IEnumerator StartPhysics()
-    {
-        start = true;
-        yield return new WaitForSeconds(2);
-        startDraw = true;
-    } 
+    // private IEnumerator StartPhysics()
+    // {
+    //     start = true;
+    //     yield return new WaitForSeconds(2);
+    //     startDraw = true;
+    // } 
 
     public void FixAt(Vector2 position)
     {
@@ -73,7 +73,6 @@ public class Rope : MonoBehaviour
         vertices.Add(Vector3.one);
         vertices.Add(Vector3.zero);
         meshFilter.mesh.SetVertices(vertices);
-        
         meshFilter.mesh.SetUVs(0, vertices);
 
         var triangles = new List<int>();
@@ -286,19 +285,23 @@ public class Rope : MonoBehaviour
             {
                 if (dis < maxLength)
                 {
-                    if (index > 1 && index < nodes.Count - 1)
+                    if (index > 1)
                     {
-                        float speed = 1f;
-                        if (length > maxLength * 2 && dis < maxLength)
+                        if (!nodes.Last.Value.Equals(hangItem))
                         {
-                            speed = 25f;
+                            float speed = 1f;
+                            if (length > maxLength * 2 && dis < maxLength)
+                            {
+                                speed = 25f;
+                            }
+
+                            var destination = (Vector2)nodes.First.Value.transform.position +
+                                              Vector2.down.normalized *
+                                              (index * (maxLength - 0.1f) / (nodes.Count - 1));
+
+                            var dist = destination - (Vector2)node.Value.transform.position;
+                            node.Value.transform.Translate(dist * (speed * Time.deltaTime));
                         }
-
-                        var destination = (Vector2)nodes.First.Value.transform.position +
-                                          Vector2.down.normalized * (index * (maxLength - 0.1f) / (nodes.Count - 1));
-
-                        var dist = destination - (Vector2)node.Value.transform.position;
-                        node.Value.transform.Translate(dist * (speed * Time.deltaTime));
                     }
                 }
             }
