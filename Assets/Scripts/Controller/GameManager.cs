@@ -1,85 +1,55 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using Random = UnityEngine.Random;
 
 public class GameManager : MonoBehaviour
 {
+
+    public static GameManager Instance;
+    
     public Node hangingItem;
     public Rope ropePrefab;
-    public GameObject mouseCollider;
-    void Start()
+    public LevelData levelData;
+
+    private void Start()
     {
-        Rope rope = Instantiate(ropePrefab);
-        rope.FixAt(new Vector2(3, -2.5f));
-        rope.SetNodeCount(5);
-        rope.HangItem(hangingItem);
-        
-        rope = Instantiate(ropePrefab);
-        rope.FixAt(new Vector2(2, 2.5f));
-        rope.SetNodeCount(15);
-        rope.HangItem(hangingItem);
-        
-        rope = Instantiate(ropePrefab);
-        rope.FixAt(new Vector2(-4, -4f));
-        rope.SetNodeCount(5);
-        rope.HangItem(hangingItem);
-        
-        rope = Instantiate(ropePrefab);
-        rope.FixAt(new Vector2(-2, 2.5f));
-        rope.SetNodeCount(10);
-        rope.HangItem(hangingItem);
-        
-        
-        // var mesh = GetComponent<MeshCollider>().sharedMesh = new Mesh();
-        // GetComponent<MeshFilter>().mesh = mesh;
-        // mesh.SetVertices(new List<Vector3>
-        // {
-        //     new (-0.5f, 1f, 0),
-        //     new (0.5f, 1f, 0),
-        //     new (1f, -1f, 0),
-        //     new (-1f, -1f, 0)
-        // });
-        // mesh.SetTriangles(new List<int>()
-        // {
-        //     0, 1, 2,
-        //     2, 3, 0
-        // }, 0);
-        //
-        // var triangles = new List<int>();
-        // mesh.GetTriangles(triangles, 0);
-        //
-        // var vertices = new List<Vector3>();
-        // mesh.GetVertices(vertices);
-        // vertices.Add(new Vector3(-1, -2, 0));
-        // vertices.Add(new Vector3(1, -2, 0));
-        // mesh.SetVertices(vertices);
-        //
-        // triangles.Add(3);
-        // triangles.Add(5);
-        // triangles.Add(4);
-        // triangles.Add(5);
-        // triangles.Add(3);
-        // triangles.Add(2);
-        // mesh.SetTriangles(triangles, 0);
+        Instance = this;
+        List<int> areaIndices = new List<int> { 0, 1, 2, 3 };
+        List<int> lengthIndices = new List<int> { 0, 1, 2, 3 };
+        for (var i = 0; i < levelData.RopeCount; i++)
+        {
+            var rope = Instantiate(ropePrefab);
+            
+            var index = lengthIndices[Random.Range(0, areaIndices.Count)];
+            lengthIndices.Remove(index);
+            
+            var ropeLength = levelData.RopeLengths[index];
+            rope.SetNodeCount(ropeLength);
+            
+            index = areaIndices[Random.Range(0, areaIndices.Count)];
+            areaIndices.Remove(index);
+            var area = levelData.AreaSegments[index];
+            var x = Random.Range(area.x, area.x + area.width);
+            var y = Random.Range(area.y, area.y + area.height);
+            rope.FixAt(new Vector2(x, y));
+            
+            rope.HangItem(hangingItem);
+        }
+    }
 
-
+    public void CreateRope(LinkedList<Node> ropeNodes)
+    {
+        var rope = Instantiate(ropePrefab);
+        rope.AddAll(ropeNodes);
     }
 
     private void Update()
     {
-        if (Input.GetMouseButtonDown(0))
+        if (hangingItem.transform.position.y < -8)
         {
-            mouseCollider.SetActive(true);
-            mouseCollider.transform.position = (Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        }
-
-        if (Input.GetMouseButton(0))
-        {
-            mouseCollider.transform.position =(Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            mouseCollider.SetActive(false);
+            SceneManager.LoadScene("Game");
         }
     }
 }

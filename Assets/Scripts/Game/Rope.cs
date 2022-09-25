@@ -19,32 +19,13 @@ public class Rope : MonoBehaviour
     private bool startDraw = true;
 
     private Node hangItem;
-
-    private MeshFilter meshFilter;
     
     private void Awake()
     {
-        
         var ring = Instantiate(nodePrefab, Vector3.zero, Quaternion.identity, transform);
         nodes.AddFirst(ring);
         nodes.First.Value.Fixed = true;
-        meshFilter = GetComponent<MeshFilter>();
-        meshFilter.mesh = new Mesh();
-        meshFilter.mesh.SetVertices(new []
-        {
-            Vector3.down, Vector3.up
-        });
-
-        // StartCoroutine(StartPhysics());
-        
     }
-
-    // private IEnumerator StartPhysics()
-    // {
-    //     start = true;
-    //     yield return new WaitForSeconds(2);
-    //     startDraw = true;
-    // } 
 
     public void FixAt(Vector2 position)
     {
@@ -67,53 +48,11 @@ public class Rope : MonoBehaviour
     {
         var ring = node == null ? Instantiate(nodePrefab, transform) : node;
         nodes.AddLast(ring);
-        
-        var vertices = new List<Vector3>();
-        meshFilter.mesh.GetVertices(vertices);
-        vertices.Add(Vector3.one);
-        vertices.Add(Vector3.zero);
-        meshFilter.mesh.SetVertices(vertices);
-        meshFilter.mesh.SetUVs(0, vertices);
-
-        var triangles = new List<int>();
-        meshFilter.mesh.GetTriangles(triangles, 0);
-        int index = (nodes.Count - 1) * 2;
-        triangles.Add(index - 2);
-        triangles.Add(index - 1);
-        triangles.Add(index);
-        triangles.Add(index + 1);
-        triangles.Add(index);
-        triangles.Add(index - 1);
-        
-        triangles.Add(index - 2);
-        triangles.Add(index);
-        triangles.Add(index - 1);
-        triangles.Add(index + 1);
-        triangles.Add(index - 1);
-        triangles.Add(index);
-        
-        meshFilter.mesh.SetTriangles(triangles, 0, true);
     }
 
     public void RemoveNode()
     {
         nodes.RemoveLast();
-        
-        var vertices = new List<Vector3>();
-        meshFilter.mesh.GetVertices(vertices);
-        vertices.RemoveAt(vertices.Count - 1);
-        vertices.RemoveAt(vertices.Count - 1);
-
-        var triangles = new List<int>();
-        meshFilter.mesh.GetTriangles(triangles, 0);
-        for (int i = 0; i < 12; i++)
-        {
-            triangles.RemoveAt(triangles.Count - 1);
-        }
-
-        meshFilter.mesh.SetTriangles(triangles.ToArray(), 0, true);
-        meshFilter.mesh.SetVertices(vertices);
-        meshFilter.mesh.RecalculateNormals();
     }
 
     public void HangItem(Node hangItem)
@@ -184,19 +123,65 @@ public class Rope : MonoBehaviour
     }
 
     private Vector2 touchDirection;
+
     public void Cut(Vector2 direction)
     {
         touchDirection = direction;
         Vector2 intersectionPoint;
-        if (Utils.IntersectLineSegments2D(
-                touchDownPosition,
-                direction,
-        nodes.First.Value.transform.position,
-                nodes.Last.Value.transform.position,
-                out intersectionPoint
-            ))
+        for (int i = 0; i < nodes.Count; i++)
         {
-            RemoveHangItem();
+            if (Utils.IntersectLineSegments2D(
+                    touchDownPosition,
+                    direction, 
+                    nodes.First.Value.transform.position, 
+                    nodes.Last.Value.transform.position,
+                    out intersectionPoint
+                ))
+            {
+                CutAt(intersectionPoint);
+                return;
+            }
+        }
+    }
+
+    private bool intersected = false;
+    private void CutAt(Vector2 intersectionPoint)
+    {
+        var node = nodes.First;
+        while (node.Next != null)
+        {
+            var nextNode = node.Next;
+            if (nextNode != null)
+            {
+                var curPos = node.Value.transform.position;
+                var nextPos = nextNode.Value.transform.position;
+                if (curPos.x > intersectionPoint.x && nextPos.x < intersectionPoint.x ||
+                    curPos.x < intersectionPoint.x && nextPos.x > intersectionPoint.x ||
+                    curPos.y < intersectionPoint.y && nextPos.y > intersectionPoint.y ||
+                    curPos.y > intersectionPoint.y && nextPos.y < intersectionPoint.y)
+                {
+                    var cutRope = new LinkedList<Node>();
+                    var cacheNode = node;
+                    node = nodes.First;
+                    while (node != null)
+                    {
+                        var nNode = node.Next;
+                        nodes.Remove(node);
+                        cutRope.AddLast(node);
+                        if (node == cacheNode)
+                        {
+                            break;
+                        }
+                        node = nNode;
+                    }
+
+                    GameManager.Instance.CreateRope(cutRope);
+                    intersected = true;
+                    break;
+                }
+
+                node = nextNode;
+            }
         }
     }
 
@@ -236,10 +221,8 @@ public class Rope : MonoBehaviour
         var force = new Vector2(forcePrev.x + forceNext.x, forcePrev.y + forceNext.y);
 
         return force;
-        
     }
 
-    private List<Vector3> vertices = new List<Vector3>();
     private Vector2 touchDownPosition;
     private void Update()
     {
@@ -250,80 +233,74 @@ public class Rope : MonoBehaviour
 
         if (Input.GetMouseButton(0))
         {
-            var direction = (Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            Cut(direction);
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            nodes.Last.Value.Fixed = false;
-        }
-        var node = nodes.First;
-        int index = 0;
-        lineRenderer.startWidth = 0.1f;
-        lineRenderer.endWidth = 0.1f;
-        lineRenderer.positionCount = nodes.Count;
-        
-        vertices.Clear();
-        meshFilter.mesh.GetVertices(vertices);
-        while (node != null)
-        {
-            var ropeNode = node.Value;
-            vertices[index * 2] = new Vector3(ropeNode.transform.position.x - 0.05f, ropeNode.transform.position.y, 0);
-            vertices[index * 2 + 1] = new Vector3(ropeNode.transform.position.x + 0.05f, ropeNode.transform.position.y, 0);
-            
-            if (startDraw)
+            if (!intersected)
             {
-                lineRenderer.SetPosition(index, ropeNode.transform.position);
+                var direction = (Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition);
+                Cut(direction);
             }
+        }
 
-            index++;
+        if (Input.GetMouseButtonDown(0))
+        {
+            intersected = false;
+        }
 
-            var dir = (Vector2)(nodes.Last.Value.transform.position - nodes.First.Value.transform.position);
-            var dis = dir.magnitude;
-            if (start)
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            if (nodes.Count == 0)
             {
-                if (dis < maxLength)
+                continue;
+            }
+            var node = nodes.First;
+            int index = 0;
+            lineRenderer.startWidth = 0.14f;
+            lineRenderer.endWidth = 0.14f;
+            lineRenderer.positionCount = nodes.Count;
+            while (node != null)
+            {
+                var ropeNode = node.Value;
+
+                if (startDraw)
                 {
-                    if (index > 1)
+                    lineRenderer.SetPosition(index, ropeNode.transform.position);
+                }
+
+                index++;
+
+                var dir = (Vector2)(nodes.Last.Value.transform.position - nodes.First.Value.transform.position);
+                var dis = dir.magnitude;
+                if (start)
+                {
+                    if (dis < maxLength)
                     {
-                        if (!nodes.Last.Value.Equals(hangItem))
+                        if (index > 1)
                         {
-                            float speed = 1f;
-                            if (length > maxLength * 2 && dis < maxLength)
+                            if (!nodes.Last.Value.Equals(hangItem))
                             {
-                                speed = 25f;
+                                float speed = 1f;
+                                if (length > maxLength * 2 && dis < maxLength)
+                                {
+                                    speed = 25f;
+                                }
+
+                                var destination = (Vector2)nodes.First.Value.transform.position +
+                                                  Vector2.down.normalized *
+                                                  (index * (maxLength - 0.1f) / (nodes.Count - 1));
+
+                                var dist = destination - (Vector2)node.Value.transform.position;
+                                node.Value.transform.Translate(dist * (speed * Time.deltaTime));
                             }
-
-                            var destination = (Vector2)nodes.First.Value.transform.position +
-                                              Vector2.down.normalized *
-                                              (index * (maxLength - 0.1f) / (nodes.Count - 1));
-
-                            var dist = destination - (Vector2)node.Value.transform.position;
-                            node.Value.transform.Translate(dist * (speed * Time.deltaTime));
                         }
                     }
                 }
-            }
-
-            node = node.Next;
-        }
-        meshFilter.mesh.SetVertices(vertices);
-
-        if (Input.GetMouseButton(1))
-        {
-            if (start)
-            {
-                start = false;
-                node = nodes.First.Next;
-                var position = nodes.First.Value.transform.position = new Vector2(-5, 4.5f);
-                while (node != null)
-                {
-                    var ropeNode = node.Value;
-                    ropeNode.transform.position = new Vector2(position.x + 0.9f, 4.5f);
-                    node = node.Next;
-                }
+                node = node.Next;
             }
         }
+    }
+
+    public void AddAll(LinkedList<Node> ropeNodes)
+    {
+        Destroy(nodes.First.Value.gameObject);
+        nodes = ropeNodes;
     }
 }
