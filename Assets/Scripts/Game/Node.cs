@@ -4,15 +4,27 @@ using UnityEngine;
 
 public class Node : MonoBehaviour
 {
+
     public float mass = 1f;
     public float airResist = 1f;
     public List<Rope> hangingFrom = new List<Rope>();
+    [SerializeField]private MeshRenderer meshRenderer;
 
-    public Vector2 Velocity = Vector2.zero;
+    public Vector3 Velocity = Vector3.zero;
+    private bool isFixed;
     public bool Fixed
     {
-        set;
-        get;
+        set
+        {
+            isFixed = value;
+            meshRenderer.enabled = value;
+        }
+        get => isFixed;
+    }
+
+    private void Awake()
+    {
+        transform.position = new Vector3(transform.position.x, transform.position.y, 0);
     }
 
     public void ApplyAccelration(Vector2 acceleration)
@@ -27,7 +39,7 @@ public class Node : MonoBehaviour
             {
                 acceleration.y = 0;
             }
-            Velocity += acceleration * Time.fixedDeltaTime;
+            Velocity += (Vector3)acceleration * Time.fixedDeltaTime;
         }
     }
 
@@ -55,7 +67,9 @@ public class Node : MonoBehaviour
             }
         }
 
-        transform.Translate(Velocity * Time.deltaTime);
+        Velocity.z = 0;
+        transform.Translate(Vector3.right * (Velocity.x * Time.deltaTime));
+        transform.Translate(Vector3.up * (Velocity.y * Time.deltaTime));
     }
 
     private void FixedUpdate()

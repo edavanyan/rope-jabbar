@@ -5,7 +5,7 @@ using UnityEngine;
 public class Rope : MonoBehaviour
 {
     [SerializeField] private Node nodePrefab;
-    public LinkedList<Node> nodes = new LinkedList<Node>();
+    private LinkedList<Node> nodes = new LinkedList<Node>();
     [SerializeField] private float k = 1;
     [SerializeField] float minDistance = 1f;
 
@@ -22,7 +22,7 @@ public class Rope : MonoBehaviour
     
     private void Awake()
     {
-        var ring = Instantiate(nodePrefab, Vector3.zero, Quaternion.identity, transform);
+        var ring = Instantiate(nodePrefab, transform);
         nodes.AddFirst(ring);
         nodes.First.Value.Fixed = true;
     }
@@ -46,8 +46,12 @@ public class Rope : MonoBehaviour
 
     public void AddNode(Node node = null)
     {
-        var ring = node == null ? Instantiate(nodePrefab, transform) : node;
-        nodes.AddLast(ring);
+        if (node == null)
+        {
+            node = Instantiate(nodePrefab, nodes.First.Value.transform.position, Quaternion.identity, transform);
+        }
+
+        nodes.AddLast(node);
     }
 
     public void RemoveNode()
@@ -74,6 +78,10 @@ public class Rope : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (nodes.Count == 0)
+        {
+            return;
+        }
 
         length = 0;
         var node = nodes.First.Next;
@@ -92,20 +100,20 @@ public class Rope : MonoBehaviour
         int index = 1;
         while (node != null)
         {
-            if (!(Input.GetMouseButton(0) && distance >= maxLength))
-            {
+            // if (!(Input.GetMouseButton(0) && distance >= maxLength))
+            // {
                 var acceleration = ApplyForces(node) / node.Value.mass;
                 node.Value.ApplyAccelration(acceleration);
-            }
-            else if (!node.Equals(nodes.First))
-            {
-                const float speed = 20;
-                var destination = (Vector2)nodes.First.Value.transform.position + direction.normalized * (index * distance / (nodes.Count - 1));
-
-                var dist = destination - (Vector2)node.Value.transform.position;
-                node.Value.Velocity = dist * speed;
-                index++;
-            }
+            // }
+            // else if (!node.Equals(nodes.First))
+            // {
+            //     const float speed = 20;
+            //     var destination = (Vector2)nodes.First.Value.transform.position + direction.normalized * (index * distance / (nodes.Count - 1));
+            //
+            //     var dist = destination - (Vector2)node.Value.transform.position;
+            //     node.Value.Velocity = dist * speed;
+            //     index++;
+            // }
 
             node = node.Next;
         }
@@ -160,12 +168,15 @@ public class Rope : MonoBehaviour
                     curPos.y < intersectionPoint.y && nextPos.y > intersectionPoint.y ||
                     curPos.y > intersectionPoint.y && nextPos.y < intersectionPoint.y)
                 {
+                    RemoveHangItem();
                     var cutRope = new LinkedList<Node>();
                     var cacheNode = node;
                     node = nodes.First;
+                    node.Value.Fixed = false;
                     while (node != null)
                     {
                         var nNode = node.Next;
+                        node.Value.transform.SetParent(null, true);
                         nodes.Remove(node);
                         cutRope.AddLast(node);
                         if (node == cacheNode)
@@ -173,6 +184,20 @@ public class Rope : MonoBehaviour
                             break;
                         }
                         node = nNode;
+                    }
+
+                    if (nodes.Count == 1)
+                    {
+                        var linkedListNode = cutRope.Last;
+                        cutRope.RemoveLast();
+                        nodes.AddLast(linkedListNode);
+                    }
+
+                    if (cutRope.Count == 1)
+                    {
+                        var linkedListNode = nodes.Last;
+                        nodes.RemoveLast();
+                        cutRope.AddLast(linkedListNode);
                     }
 
                     GameManager.Instance.CreateRope(cutRope);
@@ -224,6 +249,7 @@ public class Rope : MonoBehaviour
     }
 
     private Vector2 touchDownPosition;
+
     private void Update()
     {
         if (Input.GetMouseButtonDown(0))
@@ -245,56 +271,66 @@ public class Rope : MonoBehaviour
             intersected = false;
         }
 
-        for (int i = 0; i < nodes.Count; i++)
+        var node = nodes.First;
+        int index = 0;
+        lineRenderer.startWidth = 0.13f;
+        lineRenderer.endWidth = 0.13f;
+        lineRenderer.positionCount = nodes.Count;
+        while (node != null)
         {
-            if (nodes.Count == 0)
+            var ropeNode = node.Value;
+
+            if (startDraw)
             {
-                continue;
+                lineRenderer.SetPosition(index, ropeNode.transform.position);
             }
-            var node = nodes.First;
-            int index = 0;
-            lineRenderer.startWidth = 0.14f;
-            lineRenderer.endWidth = 0.14f;
-            lineRenderer.positionCount = nodes.Count;
-            while (node != null)
+
+            index++;
+
+            var dir = (Vector2)(nodes.Last.Value.transform.position - nodes.First.Value.transform.position);
+            var dis = dir.magnitude;
+            if (start)
             {
-                var ropeNode = node.Value;
-
-                if (startDraw)
+                if (dis < maxLength)
                 {
-                    lineRenderer.SetPosition(index, ropeNode.transform.position);
-                }
-
-                index++;
-
-                var dir = (Vector2)(nodes.Last.Value.transform.position - nodes.First.Value.transform.position);
-                var dis = dir.magnitude;
-                if (start)
-                {
-                    if (dis < maxLength)
+                    if (index > 1)
                     {
-                        if (index > 1)
+                        if (!nodes.Last.Value.Equals(hangItem))
                         {
-                            if (!nodes.Last.Value.Equals(hangItem))
+                            float speed = 1f;
+                            if (length > maxLength * 2 && dis < maxLength)
                             {
-                                float speed = 1f;
-                                if (length > maxLength * 2 && dis < maxLength)
-                                {
-                                    speed = 25f;
-                                }
-
-                                var destination = (Vector2)nodes.First.Value.transform.position +
-                                                  Vector2.down.normalized *
-                                                  (index * (maxLength - 0.1f) / (nodes.Count - 1));
-
-                                var dist = destination - (Vector2)node.Value.transform.position;
-                                node.Value.transform.Translate(dist * (speed * Time.deltaTime));
+                                speed = 25f;
                             }
+
+                            var destination = (Vector3)nodes.First.Value.transform.position +
+                                              Vector3.down.normalized *
+                                              (index * (maxLength - 0.1f) / (nodes.Count - 1));
+
+                            var dist = destination - node.Value.transform.position;
+                            dist.z = 0;
+                            node.Value.transform.Translate(Vector3.right * (dist.x * speed * Time.deltaTime));
+                            node.Value.transform.Translate(Vector3.up * (dist.y * speed * Time.deltaTime));
                         }
                     }
                 }
-                node = node.Next;
             }
+
+            node = node.Next;
+        }
+
+        if (nodes.Count == 0 || (nodes.First.Value.transform.position.y < -8 && nodes.Last.Value.transform.position.y < -8))
+        {
+            var ropeNode = nodes.First;
+            while (ropeNode != null)
+            {
+                Destroy(ropeNode.Value.gameObject);
+                var curNode = ropeNode;
+                ropeNode = ropeNode.Next;
+                nodes.Remove(curNode);
+            }
+
+            Destroy(gameObject);
         }
     }
 
